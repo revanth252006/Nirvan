@@ -17,6 +17,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 import random
+import os
+from ..database import engine
+
+@router.get("/reset-db")
+def reset_db():
+    models.Base.metadata.drop_all(bind=engine)
+    models.Base.metadata.create_all(bind=engine)
+    return {"status": "Database successfully reset and schema migrated!"}
 
 class UserLogin(schemas.BaseModel):
     email: schemas.EmailStr
