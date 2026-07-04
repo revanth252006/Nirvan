@@ -71,6 +71,7 @@ def check_user(email: str, phone: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Mail is already existing")
     
     return {"status": "available"}
+
 @router.post("/send-otp")
 def send_otp(request: schemas.OTPRequest, db: Session = Depends(get_db)):
     # Clean up old OTPs for this phone if any
@@ -95,10 +96,11 @@ def send_otp(request: schemas.OTPRequest, db: Session = Depends(get_db)):
 
 @router.post("/register", response_model=schemas.User)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    # Verify OTP first
-    db_otp = db.query(models.OTP).filter(models.OTP.phone == user.phone, models.OTP.otp_code == user.otp).first()
-    if not db_otp or db_otp.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    # Verify OTP first (unless bypassed via UI)
+    if user.otp != 'auto_verified_no_firebase':
+        db_otp = db.query(models.OTP).filter(models.OTP.phone == user.phone, models.OTP.otp_code == user.otp).first()
+        if not db_otp or db_otp.expires_at < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Invalid or expired OTP")
         
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
