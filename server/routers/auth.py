@@ -172,12 +172,20 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        # Since they verified the OTP, they proved ownership of the email.
+        # Allow them to re-register/reset password.
+        db_user.hashed_password = get_password_hash(user.password)
+        db_user.name = user.name
+        if user.phone:
+            db_user.phone = user.phone
+        db.commit()
+        db.refresh(db_user)
+        return db_user
     
     if user.phone:
         db_phone = db.query(models.User).filter(models.User.phone == user.phone).first()
-        if db_phone:
-            raise HTTPException(status_code=400, detail="Phone number already registered")
+        if db_phone and db_phone.email != user.email:
+            raise HTTPException(status_code=400, detail="Phone number already registered to another account")
     
     hashed_pw = get_password_hash(user.password)
     new_user = models.User(
