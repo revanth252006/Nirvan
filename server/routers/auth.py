@@ -144,6 +144,27 @@ def verify_email_otp(request: schemas.UserCreate, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
     return {"status": "success"}
 
+@router.get("/test-email")
+def test_email(to_email: str = "a.revanth2006@gmail.com"):
+    try:
+        sender_email = os.getenv("EMAIL_SENDER", "safenirvan@gmail.com")
+        sender_password = os.getenv("EMAIL_PASSWORD", "wkorzbncmxrhcdax")
+        
+        msg = MIMEMultipart()
+        msg['From'] = f"Nirvan App <{sender_email}>"
+        msg['To'] = to_email
+        msg['Subject'] = "Test from Render"
+        msg.attach(MIMEText("Test", 'html'))
+        
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return {"status": "Success! The email went through."}
+    except Exception as e:
+        import traceback
+        return {"status": "Failed", "error": str(e), "traceback": traceback.format_exc()}
+
 @router.post("/register", response_model=schemas.User)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # Verify OTP first (unless bypassed via UI)
