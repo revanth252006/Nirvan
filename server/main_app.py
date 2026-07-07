@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from .database import engine
 from . import models
-from .routers import auth, circles, location, driving, safety, users, agents
+from .routers import auth, circles, location, driving, safety, users
 
 # Create all database tables (SQLite for Phase 1)
 models.Base.metadata.create_all(bind=engine)
@@ -21,7 +21,6 @@ app.include_router(location.router)
 app.include_router(driving.router)
 app.include_router(safety.router)
 app.include_router(users.router)
-app.include_router(agents.router)
 
 @app.get("/")
 def root():

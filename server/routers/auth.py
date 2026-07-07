@@ -69,11 +69,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 
 
 @router.get("/check-user")
-def check_user(email: str, phone: str, db: Session = Depends(get_db)):
-    db_phone = db.query(models.User).filter(models.User.phone == phone).first()
-    if db_phone:
-        raise HTTPException(status_code=400, detail="Mobile number is already existing")
-        
+def check_user(email: str, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Mail is already existing")
@@ -82,48 +78,47 @@ def check_user(email: str, phone: str, db: Session = Depends(get_db)):
 
 @router.post("/send-otp")
 def send_otp(request: schemas.OTPRequest, db: Session = Depends(get_db)):
-    # Clean up old OTPs for this phone if any
-    db.query(models.OTP).filter(models.OTP.phone == request.phone).delete()
+    # Clean up old OTPs for this email if any
+    db.query(models.OTP).filter(models.OTP.email == request.email).delete()
     
     # Generate a random 6-digit OTP
     otp = str(random.randint(100000, 999999))
     expires_at = datetime.utcnow() + timedelta(minutes=10) # Valid for 10 minutes
     
-    new_otp = models.OTP(phone=request.phone, otp_code=otp, expires_at=expires_at)
+    new_otp = models.OTP(email=request.email, otp_code=otp, expires_at=expires_at)
     db.add(new_otp)
     db.commit()
     
-    # TODO: Integrate external SMS provider (e.g. Twilio)
-    # twilio_client.messages.create(body=f"Your Nirvan verification code is: {otp}", from_=TWILIO_NUMBER, to=request.phone)
-    
     print(f"\n{'='*40}")
-    print(f"[SMS SIMULATION] TO {request.phone}:")
+    print(f"📧 EMAIL OTP SIMULATION TO {request.email}:")
     print(f"Your Nirvan verification code is: {otp}")
     print(f"{'='*40}\n")
     return {"message": "OTP sent successfully"}
+
+@router.post("/verify-email-otp")
+def verify_email_otp(request: schemas.UserCreate, db: Session = Depends(get_db)):
+    db_otp = db.query(models.OTP).filter(models.OTP.email == request.email, models.OTP.otp_code == request.otp).first()
+    if not db_otp or db_otp.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    return {"status": "success"}
 
 @router.post("/register", response_model=schemas.User)
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # Verify OTP first (unless bypassed via UI)
     if user.otp != 'auto_verified_no_firebase':
-        db_otp = db.query(models.OTP).filter(models.OTP.phone == user.phone, models.OTP.otp_code == user.otp).first()
+        db_otp = db.query(models.OTP).filter(models.OTP.email == user.email, models.OTP.otp_code == user.otp).first()
         if not db_otp or db_otp.expires_at < datetime.utcnow():
             raise HTTPException(status_code=400, detail="Invalid or expired OTP")
         
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    db_phone = db.query(models.User).filter(models.User.phone == user.phone).first()
-
     if db_user:
-        # User already exists by email. Return existing user to prevent blocking.
-        return db_user
-        
-    if db_phone:
-        # Phone already exists, but email is different. Update email.
-        db_phone.email = user.email
-        db.commit()
-        db.refresh(db_phone)
-        return db_phone
-
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    if user.phone:
+        db_phone = db.query(models.User).filter(models.User.phone == user.phone).first()
+        if db_phone:
+            raise HTTPException(status_code=400, detail="Phone number already registered")
+    
     hashed_pw = get_password_hash(user.password)
     new_user = models.User(
         name=user.name,
@@ -136,41 +131,17 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     
     # Remove OTP after successful registration
-    db.query(models.OTP).filter(models.OTP.phone == user.phone).delete()
+    db.query(models.OTP).filter(models.OTP.email == user.email).delete()
     db.commit()
     
     # Simulate Welcome Email
     print(f"\n{'='*40}")
-    print(f"[EMAIL SIMULATION] TO {user.email}:")
+    print(f"📧 EMAIL SIMULATION TO {user.email}:")
     print(f"Subject: Welcome to Nirvan, {user.name}!")
     print(f"Body: You have successfully created your Nirvan account. Stay safe!")
     print(f"{'='*40}\n")
     
     return new_user
-
-@router.post("/firebase-login")
-def firebase_login(request: schemas.FirebaseLoginRequest, db: Session = Depends(get_db)):
-    try:
-        # For development: Decode JWT without verification to extract email
-        unverified_claims = jwt.get_unverified_claims(request.firebase_token)
-        email = unverified_claims.get("email")
-        if not email:
-            raise HTTPException(status_code=400, detail="Token does not contain email")
-            
-        user = db.query(models.User).filter(models.User.email == email).first()
-        if not user:
-            # If user not found, we could auto-create or reject. 
-            # Rejecting is safer, requires user to register first.
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not registered in local database"
-            )
-        
-        access_token = create_access_token(data={"sub": user.email})
-        circle_ids = [c.id for c in user.circles]
-        return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "name": user.name, "circle_ids": circle_ids}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
 
 @router.post("/login")
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
@@ -183,5 +154,4 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
         )
     
     access_token = create_access_token(data={"sub": user.email})
-    circle_ids = [c.id for c in user.circles]
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "name": user.name, "circle_ids": circle_ids}
+    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "name": user.name, "circle_id": user.circle_id}

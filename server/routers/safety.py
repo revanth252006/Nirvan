@@ -17,11 +17,6 @@ def get_emergency_contacts(db: Session = Depends(get_db), current_user: models.U
 
 @router.post("/contacts", response_model=schemas.EmergencyContact)
 def add_emergency_contact(contact: schemas.EmergencyContactBase, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    from fastapi import HTTPException
-    existing_count = db.query(models.EmergencyContact).filter(models.EmergencyContact.user_id == current_user.id).count()
-    if existing_count >= 5:
-        raise HTTPException(status_code=400, detail="Maximum 5 emergency contacts allowed")
-        
     new_contact = models.EmergencyContact(
         name=contact.name,
         phone=contact.phone,
