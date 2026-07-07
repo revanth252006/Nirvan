@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from .. import models, schemas
 from ..database import get_db
@@ -18,6 +18,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 import random
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from ..database import engine
 
 @router.get("/reset-db")
@@ -76,8 +79,44 @@ def check_user(email: str, db: Session = Depends(get_db)):
     
     return {"status": "available"}
 
+def send_email_async(to_email: str, otp: str):
+    sender_email = os.getenv("EMAIL_SENDER")
+    sender_password = os.getenv("EMAIL_PASSWORD")
+    
+    if not sender_email or not sender_password:
+        print(f"📧 EMAIL OTP SIMULATION TO {to_email}: {otp} (Configure EMAIL_SENDER and EMAIL_PASSWORD for real emails)")
+        return
+        
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"Nirvan App <{sender_email}>"
+        msg['To'] = to_email
+        msg['Subject'] = "Your Nirvan Verification Code"
+        
+        body = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
+                <h2 style="color: #4C51BF;">Nirvan Registration</h2>
+                <p>Your verification code is:</p>
+                <h1 style="letter-spacing: 5px; color: #2B6CB0; background: #EBF8FF; padding: 15px; border-radius: 10px; display: inline-block;">{otp}</h1>
+                <p>This code will expire in 10 minutes.</p>
+                <p style="color: #718096; font-size: 12px; margin-top: 30px;">If you didn't request this, please ignore this email.</p>
+            </body>
+        </html>
+        """
+        msg.attach(MIMEText(body, 'html'))
+        
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        print(f"✅ Real email successfully sent to {to_email}")
+    except Exception as e:
+        print(f"❌ Failed to send email to {to_email}: {e}")
+
 @router.post("/send-otp")
-def send_otp(request: schemas.OTPRequest, db: Session = Depends(get_db)):
+def send_otp(request: schemas.OTPRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # Clean up old OTPs for this email if any
     db.query(models.OTP).filter(models.OTP.email == request.email).delete()
     
@@ -89,11 +128,9 @@ def send_otp(request: schemas.OTPRequest, db: Session = Depends(get_db)):
     db.add(new_otp)
     db.commit()
     
-    print(f"\n{'='*40}")
-    print(f"📧 EMAIL OTP SIMULATION TO {request.email}:")
-    print(f"Your Nirvan verification code is: {otp}")
-    print(f"{'='*40}\n")
-    return {"message": "OTP sent successfully"}
+    background_tasks.add_task(send_email_async, request.email, otp)
+    
+    return {"message": "OTP processing started"}
 
 @router.post("/verify-email-otp")
 def verify_email_otp(request: schemas.UserCreate, db: Session = Depends(get_db)):
