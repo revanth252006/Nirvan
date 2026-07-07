@@ -106,8 +106,7 @@ def send_email_async(to_email: str, otp: str):
         """
         msg.attach(MIMEText(body, 'html'))
         
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         server.login(sender_email, sender_password)
         server.send_message(msg)
         server.quit()
