@@ -88,29 +88,26 @@ def send_email_async(to_email: str, otp: str):
         return
         
     try:
-        msg = MIMEMultipart()
-        msg['From'] = f"Nirvan App <{sender_email}>"
-        msg['To'] = to_email
-        msg['Subject'] = "Your Nirvan Verification Code"
+        # Use Google Apps Script to bypass Render's SMTP block
+        # We will set this URL via an environment variable or hardcode it once the user provides it
+        script_url = os.getenv("GOOGLE_SCRIPT_URL", "https://script.google.com/macros/s/AKfycbwSZRq3zqLHaWMJEqbQhR0L7w1eG8_oEc7YE2MOKMr7M1tqtHtIRnVWs0TIolTNAYgE0g/exec")
         
-        body = f"""
-        <html>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
-                <h2 style="color: #4C51BF;">Nirvan Registration</h2>
-                <p>Your verification code is:</p>
-                <h1 style="letter-spacing: 5px; color: #2B6CB0; background: #EBF8FF; padding: 15px; border-radius: 10px; display: inline-block;">{otp}</h1>
-                <p>This code will expire in 10 minutes.</p>
-                <p style="color: #718096; font-size: 12px; margin-top: 30px;">If you didn't request this, please ignore this email.</p>
-            </body>
-        </html>
-        """
-        msg.attach(MIMEText(body, 'html'))
+        if script_url == "REPLACE_ME":
+            print(f"📧 EMAIL OTP SIMULATION TO {to_email}: {otp} (Waiting for Google Script URL)")
+            return
+            
+        import requests
+        payload = {
+            "to": to_email,
+            "otp": otp
+        }
+        response = requests.post(script_url, json=payload)
         
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        print(f"✅ Real email successfully sent to {to_email}")
+        if response.status_code == 200:
+            print(f"✅ Real email successfully sent to {to_email} via Google Apps Script")
+        else:
+            print(f"❌ Failed to send email via Google Script. Status: {response.status_code}")
+            
     except Exception as e:
         print(f"❌ Failed to send email to {to_email}: {e}")
 
