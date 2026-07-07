@@ -80,8 +80,8 @@ def check_user(email: str, db: Session = Depends(get_db)):
     return {"status": "available"}
 
 def send_email_async(to_email: str, otp: str):
-    sender_email = os.getenv("EMAIL_SENDER")
-    sender_password = os.getenv("EMAIL_PASSWORD")
+    sender_email = os.getenv("EMAIL_SENDER", "safenirvan@gmail.com")
+    sender_password = os.getenv("EMAIL_PASSWORD", "wkorzbncmxrhcdax")
     
     if not sender_email or not sender_password:
         print(f"📧 EMAIL OTP SIMULATION TO {to_email}: {otp} (Configure EMAIL_SENDER and EMAIL_PASSWORD for real emails)")
