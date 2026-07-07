@@ -116,20 +116,26 @@ def send_email_async(to_email: str, otp: str):
 
 @router.post("/send-otp")
 def send_otp(request: schemas.OTPRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    # Clean up old OTPs for this email if any
-    db.query(models.OTP).filter(models.OTP.email == request.email).delete()
-    
-    # Generate a random 6-digit OTP
-    otp = str(random.randint(100000, 999999))
-    expires_at = datetime.utcnow() + timedelta(minutes=10) # Valid for 10 minutes
-    
-    new_otp = models.OTP(email=request.email, otp_code=otp, expires_at=expires_at)
-    db.add(new_otp)
-    db.commit()
-    
-    background_tasks.add_task(send_email_async, request.email, otp)
-    
-    return {"message": "OTP processing started"}
+    try:
+        # Clean up old OTPs for this email if any
+        db.query(models.OTP).filter(models.OTP.email == request.email).delete()
+        
+        # Generate a random 6-digit OTP
+        otp = str(random.randint(100000, 999999))
+        expires_at = datetime.utcnow() + timedelta(minutes=10) # Valid for 10 minutes
+        
+        new_otp = models.OTP(email=request.email, otp_code=otp, expires_at=expires_at)
+        db.add(new_otp)
+        db.commit()
+        
+        background_tasks.add_task(send_email_async, request.email, otp)
+        
+        return {"message": "OTP processing started"}
+    except Exception as e:
+        import traceback
+        error_msg = f"Exception: {str(e)}\n{traceback.format_exc()}"
+        print(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post("/verify-email-otp")
 def verify_email_otp(request: schemas.UserCreate, db: Session = Depends(get_db)):
