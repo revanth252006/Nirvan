@@ -97,7 +97,7 @@ def send_otp(request: schemas.OTPRequest, db: Session = Depends(get_db)):
     # twilio_client.messages.create(body=f"Your Nirvan verification code is: {otp}", from_=TWILIO_NUMBER, to=request.phone)
     
     print(f"\n{'='*40}")
-    print(f"📲 SMS SIMULATION TO {request.phone}:")
+    print(f"[SMS SIMULATION] TO {request.phone}:")
     print(f"Your Nirvan verification code is: {otp}")
     print(f"{'='*40}\n")
     return {"message": "OTP sent successfully"}
@@ -111,13 +111,19 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Invalid or expired OTP")
         
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
     db_phone = db.query(models.User).filter(models.User.phone == user.phone).first()
+
+    if db_user:
+        # User already exists by email. Return existing user to prevent blocking.
+        return db_user
+        
     if db_phone:
-        raise HTTPException(status_code=400, detail="Phone number already registered")
-    
+        # Phone already exists, but email is different. Update email.
+        db_phone.email = user.email
+        db.commit()
+        db.refresh(db_phone)
+        return db_phone
+
     hashed_pw = get_password_hash(user.password)
     new_user = models.User(
         name=user.name,
@@ -135,12 +141,36 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     
     # Simulate Welcome Email
     print(f"\n{'='*40}")
-    print(f"📧 EMAIL SIMULATION TO {user.email}:")
+    print(f"[EMAIL SIMULATION] TO {user.email}:")
     print(f"Subject: Welcome to Nirvan, {user.name}!")
     print(f"Body: You have successfully created your Nirvan account. Stay safe!")
     print(f"{'='*40}\n")
     
     return new_user
+
+@router.post("/firebase-login")
+def firebase_login(request: schemas.FirebaseLoginRequest, db: Session = Depends(get_db)):
+    try:
+        # For development: Decode JWT without verification to extract email
+        unverified_claims = jwt.get_unverified_claims(request.firebase_token)
+        email = unverified_claims.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Token does not contain email")
+            
+        user = db.query(models.User).filter(models.User.email == email).first()
+        if not user:
+            # If user not found, we could auto-create or reject. 
+            # Rejecting is safer, requires user to register first.
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not registered in local database"
+            )
+        
+        access_token = create_access_token(data={"sub": user.email})
+        circle_ids = [c.id for c in user.circles]
+        return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "name": user.name, "circle_ids": circle_ids}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
 
 @router.post("/login")
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
@@ -153,4 +183,5 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
         )
     
     access_token = create_access_token(data={"sub": user.email})
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "name": user.name, "circle_id": user.circle_id}
+    circle_ids = [c.id for c in user.circles]
+    return {"access_token": access_token, "token_type": "bearer", "user_id": user.id, "name": user.name, "circle_ids": circle_ids}

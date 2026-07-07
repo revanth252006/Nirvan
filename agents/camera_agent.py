@@ -77,7 +77,6 @@ def verify_camera_emergency():
         time.sleep(0.1)
         
     cap.release()
-    cv2.destroyAllWindows()
     
     if not frames:
         print("❌ Error: No frames captured from webcam.")
@@ -98,6 +97,31 @@ def verify_camera_emergency():
     print(f"📊 Camera Threat Probability: {max_probability:.4f}")
     
     if max_probability > 0.5:
+        print("🚨 [CAMERA CONFIRMED] VISUAL THREAT DETECTED! 🚨")
+        return True
+    else:
+        print("🟢 [CAMERA SAFE] No visual threat detected. You're safe.")
+        return False
+
+def verify_camera_file(file_path):
+    """Reads an image file, preprocesses it, and returns True if anomaly detected."""
+    interpreter = load_tflite_model()
+    if interpreter is None:
+        return False
+
+    print(f"\n📷 [STAGE 3 ACTIVATED] Analyzing uploaded camera image: {file_path}")
+    
+    frame = cv2.imread(file_path)
+    if frame is None:
+        print(f"❌ Error loading image file: {file_path}")
+        return False
+
+    preprocessed = preprocess_frame(frame)
+    probability = run_inference(interpreter, preprocessed)
+    
+    print(f"📊 Camera Threat Probability: {probability:.4f}")
+    
+    if probability > 0.5:
         print("🚨 [CAMERA CONFIRMED] VISUAL THREAT DETECTED! 🚨")
         return True
     else:

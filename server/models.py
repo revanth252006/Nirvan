@@ -1,7 +1,14 @@
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Float
+from sqlalchemy import Table, Column, Integer, String, Boolean, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
+
+user_circles = Table(
+    "user_circles",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id")),
+    Column("circle_id", Integer, ForeignKey("circles.id"))
+)
 
 class Circle(Base):
     __tablename__ = "circles"
@@ -10,7 +17,7 @@ class Circle(Base):
     name = Column(String, index=True)
     invite_code = Column(String, unique=True, index=True)
 
-    members = relationship("User", back_populates="circle")
+    members = relationship("User", secondary=user_circles, back_populates="circles")
     alerts = relationship("Alert", back_populates="circle")
 
 class User(Base):
@@ -27,8 +34,7 @@ class User(Base):
     is_premium = Column(Boolean, default=False)
     driving_score = Column(Integer, default=100)
     
-    circle_id = Column(Integer, ForeignKey("circles.id"), nullable=True)
-    circle = relationship("Circle", back_populates="members")
+    circles = relationship("Circle", secondary=user_circles, back_populates="members")
     
     trips = relationship("Trip", back_populates="user")
     safe_places = relationship("SafePlace", back_populates="user")

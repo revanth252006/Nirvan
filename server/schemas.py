@@ -63,10 +63,18 @@ class CircleBase(BaseModel):
 class CircleCreate(CircleBase):
     pass
 
+class UserSlim(BaseModel):
+    id: int
+    name: str
+    phone: str
+    class Config:
+        from_attributes = True
+
 class Circle(CircleBase):
     id: int
     invite_code: str
     alerts: List[Alert] = []
+    members: List[UserSlim] = []
     class Config:
         from_attributes = True
 
@@ -88,8 +96,7 @@ class User(UserBase):
     id: int
     is_premium: bool
     driving_score: int
-    circle_id: Optional[int] = None
-    circle: Optional[Circle] = None
+    circles: List[Circle] = []
     trips: List[Trip] = []
     safe_places: List[SafePlace] = []
     emergency_contacts: List[EmergencyContact] = []
@@ -97,12 +104,15 @@ class User(UserBase):
         from_attributes = True
 
 # --- Auth Schemas ---
+class FirebaseLoginRequest(BaseModel):
+    firebase_token: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
     user_id: int
     name: str
-    circle_id: Optional[int] = None
+    circle_ids: List[int] = []
 
 class TokenData(BaseModel):
     email: Optional[str] = None

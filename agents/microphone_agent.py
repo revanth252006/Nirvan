@@ -21,7 +21,7 @@ def load_tflite_model():
         print(f"❌ Error: Audio model missing at {MODEL_PATH}")
         return None
     interpreter = tf.lite.Interpreter(model_path=MODEL_PATH)
-    interpreter.allocate_tflites() if hasattr(interpreter, "allocate_tflites") else interpreter.allocate_tensors()
+    interpreter.allocate_tensors()
     return interpreter
 
 def run_inference(interpreter, mfcc_features):
@@ -61,7 +61,7 @@ def verify_audio_emergency():
     probability = run_inference(interpreter, mfccs_processed)
     print(f"📊 Audio Threat Probability: {probability:.4f}")
     
-    if probability > 0.5:
+    if probability > 0.85:
         print("🚨 [AUDIO CONFIRMED] High threat signature detected!")
         return True
     else:
@@ -104,7 +104,7 @@ def verify_audio_file(file_path):
     probability = run_inference(interpreter, mfccs_processed)
     print(f"📊 Audio Threat Probability: {probability:.4f}")
     
-    if probability > 0.5:
+    if probability > 0.85:
         print("🚨 [AUDIO CONFIRMED] High threat signature detected!")
         return True
     else:

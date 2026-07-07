@@ -33,7 +33,7 @@ def create_circle(circle: schemas.CircleCreate, user_id: int, db: Session = Depe
     db.refresh(new_circle)
     
     # Automatically add the creator to this new circle
-    user.circle_id = new_circle.id
+    user.circles.append(new_circle)
     db.commit()
     
     return new_circle
@@ -48,7 +48,10 @@ def join_circle(invite_code: str, user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    user.circle_id = circle.id
+    if circle in user.circles:
+        raise HTTPException(status_code=400, detail="User already in this circle")
+        
+    user.circles.append(circle)
     db.commit()
     
     return {"message": f"Successfully joined {circle.name}", "circle_id": circle.id}
@@ -59,16 +62,16 @@ def get_circle_members(circle_id: int, db: Session = Depends(get_db)):
     if not circle:
         raise HTTPException(status_code=404, detail="Circle not found")
         
-    # Return all members dynamically, unlimited size!
-    members = db.query(models.User).filter(models.User.circle_id == circle_id).all()
-    return [{"id": m.id, "name": m.name, "phone": m.phone} for m in members]
+    # Return all members from the relationship
+    return [{"id": m.id, "name": m.name, "phone": m.phone, "profile_photo_url": m.profile_photo_url} for m in circle.members]
 
 @router.delete("/{circle_id}/members/{user_id}")
 def remove_member(circle_id: int, user_id: int, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id, models.User.circle_id == circle_id).first()
-    if not user:
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    circle = db.query(models.Circle).filter(models.Circle.id == circle_id).first()
+    if not user or not circle or circle not in user.circles:
         raise HTTPException(status_code=404, detail="Member not found in this circle")
     
-    user.circle_id = None
+    user.circles.remove(circle)
     db.commit()
     return {"message": f"Successfully removed user from circle"}

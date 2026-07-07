@@ -9,7 +9,7 @@ import requests
 app = Flask(__name__)
 
 # --- Configuration ---
-ACCEL_THRESHOLD = 500.0  # Adjust this value based on your sudden movement/fall tests
+ACCEL_THRESHOLD = 35.0  # Increased to make it 'normal' and not overly sensitive
 
 # --- Sensor Logger Receiver ---
 @app.route('/logs', methods=['POST'])
